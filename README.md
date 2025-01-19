@@ -19,6 +19,9 @@ A powerful and user-friendly Windows application for analyzing disk space usage 
 - .NET Framework 8.0 or later
 - Administrator privileges for scanning system directories
 
+## Screenshot
+![Disk Space Analyzer](https://github.com/liknes/DiskSpaceAnalyzer/blob/main/Screenshots/screenshot.png)
+
 ## Installation
 
 1. Download the latest release from the [Releases](https://github.com/yourusername/DiskSpaceAnalyzer/releases) page
