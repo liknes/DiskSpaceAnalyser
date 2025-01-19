@@ -11,30 +11,37 @@ namespace DiskSpaceAnalyzer
     using System.Text.Json;
     using System.Security.Cryptography;
     using DiskSpaceAnalyzer.Forms;
+    using System.Drawing;
+    using ImageMagick;
 
     public partial class MainForm : Form
     {
-        private TreeView treeView;
-        private Button scanButton;
-        private ComboBox driveComboBox;
-        private Label statusLabel;
-        private ProgressBar progressBar;
-        private Panel fileInfoPanel;
-        private Label fileInfoLabel;
-        private Chart fileTypeChart;
-        private Panel statisticsPanel;
-        private Label statisticsLabel;
-        private TextBox searchBox;
-        private Panel filterPanel;
-        private ComboBox sizeFilterCombo;
-        private TextBox extensionFilterBox;
-        private Button settingsButton;
-        private SplitContainer mainSplitContainer;
-        private SplitContainer rightSplitContainer;
-        private FlowLayoutPanel breadcrumbBar;
-        private Panel previewPanel;
-        private PictureBox previewPicture;
-        private TextBox previewText;
+        private Panel? topPanel;
+        private TreeView? treeView;
+        private Button? scanButton;
+        private ComboBox? driveComboBox;
+        private Label? statusLabel;
+        private ProgressBar? progressBar;
+        private Panel? fileInfoPanel;
+        private Label? fileInfoLabel;
+        private Chart? fileTypeChart;
+        private Panel? statisticsPanel;
+        private Label? statisticsLabel;
+        private TextBox? searchBox;
+        private Panel? filterPanel;
+        private ComboBox? sizeFilterCombo;
+        private TextBox? extensionFilterBox;
+        private Button? settingsButton;
+        private SplitContainer? mainSplitContainer;
+        private SplitContainer? rightSplitContainer;
+        private FlowLayoutPanel? breadcrumbBar;
+        private Panel? previewPanel;
+        private PictureBox? previewPicture;
+        private TextBox? previewText;
+        private Label? loadingLabel;
+        private Button? timelineButton;
+        private Button? diskTrendsButton;
+        private Button? duplicatesButton;
 
         private CancellationTokenSource? _cancellationTokenSource;
         private AppSettings _settings;
@@ -43,8 +50,19 @@ namespace DiskSpaceAnalyzer
         private int _totalFiles;
         private int _totalDirectories;
 
-        private ImageList _iconList;
+        private ImageList? _iconList;
         private ConcurrentDictionary<string, FolderStats> _folderStats = new();
+
+        private ListView? fileTypeListView;
+
+        private Button? browseButton;
+
+        private DateTime _scanStartTime;
+        private long _totalBytesToScan;
+
+        private Panel? statusPanel;
+
+        private Label? versionLabel;
 
         public MainForm()
         {
@@ -55,30 +73,37 @@ namespace DiskSpaceAnalyzer
             InitializeControls();
             LoadDrives();
             ApplyTheme();
-            this.Text = "Disk Space Analyzer";
+            this.Text = $"Disk Space Analyzer {AppVersion.VersionString}";
             this.WindowState = FormWindowState.Maximized;
         }
 
         private void InitializeMainLayout()
         {
-            // Main split container (TreeView | Right Panel)
             mainSplitContainer = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 60
+                Panel1MinSize = 100,
+                Panel2MinSize = 100
             };
 
-            // Right split container (FileInfo | Chart)
             rightSplitContainer = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
-                SplitterDistance = 70
+                Panel1MinSize = 100,
+                Panel2MinSize = 100
             };
 
             mainSplitContainer.Panel2.Controls.Add(rightSplitContainer);
             this.Controls.Add(mainSplitContainer);
+
+            this.Load += (s, e) => {
+                if (mainSplitContainer.Width > 400)
+                    mainSplitContainer.SplitterDistance = mainSplitContainer.Width / 4;  // 25% for tree view
+                if (rightSplitContainer.Height > 400)
+                    rightSplitContainer.SplitterDistance = rightSplitContainer.Height / 3;  // 33% for top panel
+            };
         }
 
         private void InitializeControls()
@@ -87,17 +112,45 @@ namespace DiskSpaceAnalyzer
             InitializeTreeView();
             InitializeBreadcrumbBar();
             InitializeFileInfoPanel();
-            InitializeChartPanel();
             InitializeStatisticsPanel();
+            InitializeFileTypePanel();
             InitializeFilterPanel();
             InitializeSearchBox();
             InitializeContextMenu();
-            InitializePreviewPanel();
+            
+            // Initial text
+            if (statisticsLabel != null)
+                statisticsLabel.Text = "Click 'Browse' to select a folder or choose a drive to scan";
+
+            if (fileInfoLabel != null)
+                fileInfoLabel.Text = "Select a file or folder to view its details";
+
+            if (previewText != null)
+            {
+                previewText.Visible = true;
+                previewText.Text = "File preview will appear here when you select a supported file";
+            }
+
+            if (treeView != null)
+            {
+                var welcomeNode = new TreeNode("Welcome to Disk Space Analyzer");
+                welcomeNode.Nodes.Add("Select a drive or browse for a folder to begin scanning");
+                treeView.Nodes.Add(welcomeNode);
+            }
+
+            versionLabel = new Label
+            {
+                Text = AppVersion.VersionString,
+                AutoSize = true,
+                Location = new Point(1100, 12),
+                ForeColor = Color.Gray,
+                Font = new Font("Segoe UI", 8f)
+            };
         }
 
         private void InitializeTopPanel()
         {
-            var topPanel = new Panel
+            topPanel = new Panel
             {
                 Dock = DockStyle.Top,
                 Height = 40,
@@ -107,72 +160,93 @@ namespace DiskSpaceAnalyzer
             driveComboBox = new ComboBox
             {
                 Width = 200,
-                DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(5, 8)
             };
 
             scanButton = new Button
             {
-                Text = "Scan Drive",
-                Width = 100,
-                Location = new Point(210, 8)
+                Text = "Scan",
+                Width = 80,
+                Height = 30,
+                Location = new Point(215, 5)
             };
             scanButton.Click += ScanButton_Click;
 
-            settingsButton = new Button
+            browseButton = new Button
             {
-                Text = "Settings",
+                Text = "Browse",
                 Width = 80,
-                Location = new Point(320, 8)
+                Height = 30,
+                Location = new Point(300, 5)
             };
-            settingsButton.Click += SettingsButton_Click;
+            browseButton.Click += BrowseButton_Click;
 
-            // Initialize progress bar
-            progressBar = new ProgressBar
-            {
-                Width = 150,
-                Location = new Point(410, 8),
-                Style = ProgressBarStyle.Blocks,
-                MarqueeAnimationSpeed = 30
-            };
-
-            var findDuplicatesButton = new Button
+            duplicatesButton = new Button
             {
                 Text = "Find Duplicates",
                 Width = 100,
-                Location = new Point(570, 8)
+                Height = 30,
+                Location = new Point(385, 5)
             };
-            findDuplicatesButton.Click += async (s, e) => await FindDuplicateFiles();
+            duplicatesButton.Click += async (s, e) => await FindDuplicateFiles();
 
-            var timelineButton = new Button
+            timelineButton = new Button
             {
                 Text = "Timeline",
                 Width = 80,
-                Location = new Point(680, 8)
-            };
-            timelineButton.Click += (s, e) =>
-            {
-                var items = GetAllItems();
-                using var timelineForm = new TimelineForm(items);
-                timelineForm.ShowDialog(this);
+                Height = 30,
+                Location = new Point(490, 5),
+                Enabled = false
             };
 
-            var trendsButton = new Button
+            diskTrendsButton = new Button
             {
                 Text = "Disk Trends",
                 Width = 80,
-                Location = new Point(770, 8)
-            };
-            trendsButton.Click += (s, e) =>
-            {
-                var selectedDrive = driveComboBox.Text.Split(' ')[0];
-                using var trendsForm = new DiskTrendsForm(selectedDrive);
-                trendsForm.ShowDialog(this);
+                Height = 30,
+                Location = new Point(575, 5),
+                Enabled = false
             };
 
-            // Add all controls to the panel
-            topPanel.Controls.AddRange(new Control[] { driveComboBox, scanButton, settingsButton, progressBar, findDuplicatesButton, timelineButton, trendsButton });
+            settingsButton = new Button
+            {
+                Text = "⚙️ Settings",
+                Width = 80,
+                Height = 30,
+                Location = new Point(660, 5)
+            };
+            settingsButton.Click += SettingsButton_Click;
+
+            progressBar = new ProgressBar
+            {
+                Width = 150,
+                Height = 20,
+                Location = new Point(745, 10),
+                Style = ProgressBarStyle.Blocks
+            };
+
+            statusLabel = new Label
+            {
+                Text = "Ready",
+                AutoSize = true,
+                Location = new Point(900, 12)
+            };
+
+            topPanel.Controls.AddRange(new Control[] 
+            { 
+                driveComboBox,
+                scanButton,
+                browseButton,
+                duplicatesButton,
+                timelineButton,
+                diskTrendsButton,
+                settingsButton,
+                progressBar,
+                statusLabel
+            });
+
             this.Controls.Add(topPanel);
+            LoadDrives();
         }
 
         private void InitializeTreeView()
@@ -181,15 +255,20 @@ namespace DiskSpaceAnalyzer
             _iconList.ColorDepth = ColorDepth.Depth32Bit;
             _iconList.ImageSize = new Size(16, 16);
             
-            // Add default icons
-            _iconList.Images.Add("folder", System.Drawing.SystemIcons.Application.ToBitmap());
-            _iconList.Images.Add("file", System.Drawing.SystemIcons.WinLogo.ToBitmap());
+            _iconList.Images.Add("folder", SystemIcons.Shield.ToBitmap());
+            _iconList.Images.Add("folderopen", SystemIcons.Application.ToBitmap());
+            _iconList.Images.Add("file", SystemIcons.WinLogo.ToBitmap());
             
             treeView = new TreeView
             {
                 Dock = DockStyle.Fill,
                 ShowNodeToolTips = true,
-                ImageList = _iconList
+                ImageList = _iconList,
+                Font = new Font("Segoe UI", 9F),
+                BorderStyle = BorderStyle.None,
+                ShowLines = true,
+                Indent = 20,
+                ItemHeight = 22 // Increased for better readability
             };
             treeView.AfterSelect += TreeView_AfterSelect;
             treeView.BeforeExpand += TreeView_BeforeExpand;
@@ -212,40 +291,193 @@ namespace DiskSpaceAnalyzer
 
         private void InitializeFileInfoPanel()
         {
+            Debug.WriteLine("Initializing File Info Panel");
+            
+            // Create a split container for file info and preview
+            var fileInfoSplitContainer = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                Panel1MinSize = 100,
+                Panel2MinSize = 100
+            };
+
+            // Clear any existing controls
+            if (rightSplitContainer?.Panel1 != null)
+                rightSplitContainer.Panel1.Controls.Clear();
+
+            // Add labels to identify panels
+            var panel1Label = new Label
+            {
+                Text = "File Details",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightBlue,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
+            };
+            fileInfoSplitContainer.Panel1.Controls.Add(panel1Label);
+
+            var panel2Label = new Label
+            {
+                Text = "File Preview",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightGreen,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
+            };
+            fileInfoSplitContainer.Panel2.Controls.Add(panel2Label);
+
+            // Panel 1 - File Info
             fileInfoPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.None,
+                Padding = new Padding(10)
             };
 
             fileInfoLabel = new Label
             {
                 Dock = DockStyle.Fill,
-                AutoSize = false
+                AutoSize = false,
+                Font = new Font("Segoe UI", 9F),
+                BackColor = Color.White
             };
 
             fileInfoPanel.Controls.Add(fileInfoLabel);
-            rightSplitContainer.Panel1.Controls.Add(fileInfoPanel);
+            fileInfoSplitContainer.Panel1.Controls.Add(fileInfoPanel);
+
+            // Panel 2 - Preview
+            var previewContainer = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None
+            };
+
+            previewPicture = new PictureBox
+            {
+                Dock = DockStyle.Fill,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.White,
+                Visible = false,
+                BorderStyle = BorderStyle.Fixed3D
+            };
+
+            previewText = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Visible = false,
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            loadingLabel = new Label
+            {
+                Text = "⌛ Loading preview...",
+                AutoSize = false,
+                Font = new Font("Segoe UI", 12f),
+                Visible = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                BackColor = Color.White
+            };
+
+            // Add preview controls to previewContainer
+            previewContainer.Controls.AddRange(new Control[] { previewPicture, previewText, loadingLabel });
+            fileInfoSplitContainer.Panel2.Controls.Add(previewContainer);
+
+            Debug.WriteLine("Adding fileInfoSplitContainer to rightSplitContainer.Panel1");
+            rightSplitContainer.Panel1.Controls.Add(fileInfoSplitContainer);
+
+            // Initial text
+            fileInfoLabel.Text = "Select a file or folder to view its details";
+            previewText.Text = "File preview will appear here when you select a supported file";
+            previewText.Visible = true;
+
+            // Make sure preview updates work
+            if (treeView != null)
+            {
+                Debug.WriteLine("Setting up TreeView preview handler");
+                treeView.AfterSelect -= UpdatePreview;
+                treeView.AfterSelect += UpdatePreview;
+            }
         }
 
-        private void InitializeChartPanel()
+        private void InitializeFileTypePanel()
         {
-            fileTypeChart = new Chart
+            Debug.WriteLine("Initializing File Type Panel");
+            
+            // Clear any existing controls
+            if (rightSplitContainer?.Panel2 != null)
+                rightSplitContainer.Panel2.Controls.Clear();
+
+            var panel3Label = new Label
             {
-                Dock = DockStyle.Fill
+                Text = "File Type Statistics",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightPink,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
             };
 
-            var chartArea = new ChartArea();
-            fileTypeChart.ChartAreas.Add(chartArea);
-
-            var series = new Series
+            fileTypeListView = new ListView
             {
-                ChartType = SeriesChartType.Pie,
-                Name = "FileTypes"
+                Dock = DockStyle.Fill,
+                View = View.Details,
+                FullRowSelect = true,
+                GridLines = true,
+                Sorting = SortOrder.Descending,
+                Font = new Font("Segoe UI", 9F)
             };
 
-            fileTypeChart.Series.Add(series);
-            rightSplitContainer.Panel2.Controls.Add(fileTypeChart);
+            fileTypeListView.Columns.AddRange(new[]
+            {
+                new ColumnHeader { Text = "File Type", Width = 100 },
+                new ColumnHeader { Text = "Size", Width = 100 },
+                new ColumnHeader { Text = "Count", Width = 80 },
+                new ColumnHeader { Text = "Percentage", Width = 100 },
+                new ColumnHeader { Text = "Avg. File Size", Width = 100 },
+                new ColumnHeader { Text = "Last Modified", Width = 120 }
+            });
+
+            // Add context menu
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.AddRange(new ToolStripItem[]
+            {
+                new ToolStripMenuItem("Copy to Clipboard", null, (s, e) => CopyFileTypeStats()),
+                new ToolStripMenuItem("Export to CSV...", null, (s, e) => ExportFileTypeStats()),
+                new ToolStripSeparator(),
+                new ToolStripMenuItem("Sort by Size", null, (s, e) => fileTypeListView.Sort()),
+                new ToolStripMenuItem("Filter Large Files", null, (s, e) => FilterLargeFiles())
+            });
+            fileTypeListView.ContextMenuStrip = contextMenu;
+
+            // Color coding based on file size
+            fileTypeListView.DrawItem += (s, e) => 
+            {
+                if (e.Item == null) return;
+                var percentage = double.Parse(e.Item.SubItems[3].Text.TrimEnd('%'));
+                
+                if (percentage > 10)
+                    e.Item.BackColor = Color.LightPink;
+                else if (percentage > 5)
+                    e.Item.BackColor = Color.LightYellow;
+            };
+
+            // Add initial "no data" message
+            var item = new ListViewItem(new[] { "No scan data", "-", "-", "-", "-", "-" });
+            fileTypeListView.Items.Add(item);
+
+            Debug.WriteLine("Adding controls to rightSplitContainer.Panel2");
+            rightSplitContainer.Panel2.Controls.Add(panel3Label);
+            rightSplitContainer.Panel2.Controls.Add(fileTypeListView);
+            
+            if (statisticsPanel != null)
+            {
+                statisticsPanel.Dock = DockStyle.Bottom;
+                rightSplitContainer.Panel2.Controls.Add(statisticsPanel);
+            }
         }
 
         private void InitializeStatisticsPanel()
@@ -253,27 +485,21 @@ namespace DiskSpaceAnalyzer
             statisticsPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 60,
-                BorderStyle = BorderStyle.FixedSingle
+                Height = 100,
+                BorderStyle = BorderStyle.FixedSingle,
+                Padding = new Padding(10)
             };
 
             statisticsLabel = new Label
             {
                 Dock = DockStyle.Fill,
-                AutoSize = false
+                AutoSize = false,
+                Font = new Font("Segoe UI", 9F),
+                BackColor = Color.White
             };
 
-            // Initialize status label
-            statusLabel = new Label
-            {
-                Dock = DockStyle.Bottom,
-                Height = 20,
-                Text = "Ready"
-            };
-
-            statisticsPanel.Controls.Add(statisticsLabel);
-            statisticsPanel.Controls.Add(statusLabel);  // Add status label to statistics panel
-            this.Controls.Add(statisticsPanel);
+            if (statisticsPanel != null && statisticsLabel != null)
+                statisticsPanel.Controls.Add(statisticsLabel);
         }
 
         private void InitializeFilterPanel()
@@ -424,14 +650,16 @@ namespace DiskSpaceAnalyzer
 
         private async void ScanButton_Click(object sender, EventArgs e)
         {
-            if (driveComboBox.SelectedItem == null) return;
+            if (string.IsNullOrEmpty(driveComboBox?.Text)) return;
+
+            ResetPanels();
 
             if (_cancellationTokenSource != null)
             {
-                // Cancel ongoing scan
                 _cancellationTokenSource.Cancel();
-                scanButton.Text = "Scan Drive";
-                progressBar.Style = ProgressBarStyle.Blocks;
+                _cancellationTokenSource = null;
+                if (scanButton != null) scanButton.Text = "Scan";
+                if (progressBar != null) progressBar.Style = ProgressBarStyle.Blocks;
                 return;
             }
 
@@ -440,23 +668,51 @@ namespace DiskSpaceAnalyzer
             _totalScannedSize = 0;
             _totalFiles = 0;
             _totalDirectories = 0;
+            _scanStartTime = DateTime.Now;
 
-            scanButton.Text = "Cancel";
-            treeView.Nodes.Clear();
-            progressBar.Style = ProgressBarStyle.Marquee;
-            string selectedDrive = driveComboBox.SelectedItem.ToString()!.Split(' ')[0];
+            if (scanButton != null) scanButton.Text = "Cancel";
+            if (treeView != null) treeView.Nodes.Clear();
+            if (progressBar != null) 
+            {
+                progressBar.Value = 0;
+                progressBar.Style = ProgressBarStyle.Marquee;
+            }
+            
+            string selectedPath = driveComboBox.Text.Contains("(") 
+                ? driveComboBox.Text.Split(' ')[0]  // Takes "D:" from "D: (800 MB)"
+                : driveComboBox.Text;  // Use full path for folders
+
+            // Get total size to scan
+            try
+            {
+                var driveInfo = new DriveInfo(selectedPath);
+                if (driveInfo.IsReady)
+                {
+                    _totalBytesToScan = driveInfo.TotalSize - driveInfo.TotalFreeSpace;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error getting drive info: {ex.Message}");
+                _totalBytesToScan = 0;
+            }
 
             try
             {
                 _cancellationTokenSource = new CancellationTokenSource();
-                await ScanDirectoryOptimized(selectedDrive, treeView.Nodes, _cancellationTokenSource.Token);
+                if (treeView != null) await ScanDirectoryOptimized(selectedPath, treeView.Nodes, _cancellationTokenSource.Token);
                 UpdateStatistics();
-                UpdateFileTypeChart();
-                statusLabel.Text = "Scan completed";
+                UpdateFileTypeStats();
+                if (statusLabel != null) statusLabel.Text = "Scan completed";
+                if (progressBar != null) 
+                {
+                    progressBar.Style = ProgressBarStyle.Blocks;
+                    progressBar.Value = 100;
+                }
             }
             catch (OperationCanceledException)
             {
-                statusLabel.Text = "Scan cancelled";
+                if (statusLabel != null) statusLabel.Text = "Scan cancelled";
             }
             catch (Exception ex)
             {
@@ -466,9 +722,28 @@ namespace DiskSpaceAnalyzer
             {
                 _cancellationTokenSource?.Dispose();
                 _cancellationTokenSource = null;
-                scanButton.Text = "Scan Drive";
-                progressBar.Style = ProgressBarStyle.Blocks;
+                if (scanButton != null) scanButton.Text = "Scan";
+                if (progressBar != null) progressBar.Style = ProgressBarStyle.Blocks;
             }
+        }
+
+        private void UpdateProgress()
+        {
+            if (progressBar == null || _totalBytesToScan == 0) return;
+
+            var progress = (int)((_totalScannedSize * 100.0) / _totalBytesToScan);
+            progress = Math.Min(99, progress); // Never show 100% until completely done
+
+            var elapsedTime = DateTime.Now - _scanStartTime;
+            var estimatedTotalTime = TimeSpan.FromTicks((long)(elapsedTime.Ticks / (_totalScannedSize / (double)_totalBytesToScan)));
+            var remainingTime = estimatedTotalTime - elapsedTime;
+
+            this.Invoke(() =>
+            {
+                progressBar.Value = progress;
+                statusLabel.Text = $"Scanned {_totalFiles:N0} files ({FileSystemHelper.FormatSize(_totalScannedSize)}) - " +
+                                  $"Est. {remainingTime.Minutes:D2}:{remainingTime.Seconds:D2} remaining";
+            });
         }
 
         private async Task ScanDirectoryOptimized(string path, TreeNodeCollection parentNode, CancellationToken cancellationToken)
@@ -606,11 +881,11 @@ namespace DiskSpaceAnalyzer
                         }
                     });
 
-                    // Update UI periodically
+                    // Update status periodically
                     if (_totalFiles % 100 == 0)
                     {
+                        UpdateProgress();
                         UpdateStatisticsSafe();
-                        UpdateFolderNodes(directoryNodes);
                     }
                 }
 
@@ -633,6 +908,7 @@ namespace DiskSpaceAnalyzer
 
         private void UpdateStatusLabel(string text)
         {
+            if (statusLabel == null) return;
             if (statusLabel.InvokeRequired)
             {
                 statusLabel.Invoke(() => statusLabel.Text = text);
@@ -719,24 +995,57 @@ namespace DiskSpaceAnalyzer
             return true;
         }
 
-        private void UpdateFileTypeChart()
+        private void UpdateFileTypeStats()
         {
-            fileTypeChart.Series["FileTypes"].Points.Clear();
+            if (fileTypeListView == null) return;
+            
+            fileTypeListView.BeginUpdate();
+            fileTypeListView.Items.Clear();
+            var items = new List<ListViewItem>();
 
-            var sortedStats = _fileTypeStats
-                .OrderByDescending(kvp => kvp.Value)
-                .Take(10);
+            var fileTypeInfo = new Dictionary<string, (long TotalSize, int Count, DateTime LastModified)>();
 
-            foreach (var stat in sortedStats)
+            // Gather detailed information
+            foreach (var item in GetAllItems().Where(i => !i.IsDirectory))
             {
-                var point = fileTypeChart.Series["FileTypes"].Points.Add(stat.Value);
-                point.LegendText = stat.Key;
-                point.Label = $"{stat.Key}\n{FileSystemHelper.FormatSize(stat.Value)}";
+                var ext = Path.GetExtension(item.Name).ToLowerInvariant();
+                if (!fileTypeInfo.ContainsKey(ext))
+                    fileTypeInfo[ext] = (item.Size, 1, item.Modified);
+                else
+                {
+                    var current = fileTypeInfo[ext];
+                    fileTypeInfo[ext] = (current.TotalSize + item.Size, 
+                                       current.Count + 1, 
+                                       item.Modified > current.LastModified ? item.Modified : current.LastModified);
+                }
             }
+
+            foreach (var type in fileTypeInfo.OrderByDescending(x => x.Value.TotalSize))
+            {
+                var percentage = (double)type.Value.TotalSize / _totalScannedSize * 100;
+                var avgSize = type.Value.Count > 0 ? type.Value.TotalSize / type.Value.Count : 0;
+                
+                var item = new ListViewItem(new[]
+                {
+                    string.IsNullOrEmpty(type.Key) ? "(no extension)" : type.Key,
+                    FileSystemHelper.FormatSize(type.Value.TotalSize),
+                    type.Value.Count.ToString("N0"),
+                    $"{percentage:F1}%",
+                    FileSystemHelper.FormatSize(avgSize),
+                    type.Value.LastModified.ToString("g")
+                });
+                
+                items.Add(item);
+            }
+
+            fileTypeListView.Items.AddRange(items.ToArray());
+            fileTypeListView.EndUpdate();
         }
 
         private void UpdateStatistics()
         {
+            if (statisticsLabel == null) return;
+
             statisticsLabel.Text = $@"Scan Statistics:
 Total Size: {FileSystemHelper.FormatSize(_totalScannedSize)}
 Files Found: {_totalFiles:N0}
@@ -813,7 +1122,7 @@ Full Path: {item.FullPath}";
 
         private void DeleteSelectedFile()
         {
-            if (treeView.SelectedNode?.Tag is FileSystemItem item)
+            if (treeView?.SelectedNode?.Tag is FileSystemItem item)
             {
                 try
                 {
@@ -866,26 +1175,181 @@ Full Path: {item.FullPath}";
         {
             if (_settings.DarkMode)
             {
-                this.BackColor = Color.FromArgb(32, 32, 32);
-                this.ForeColor = Color.White;
-                treeView.BackColor = Color.FromArgb(48, 48, 48);
-                treeView.ForeColor = Color.White;
-                fileInfoPanel.BackColor = Color.FromArgb(48, 48, 48);
-                statisticsPanel.BackColor = Color.FromArgb(48, 48, 48);
+                // Dark theme colors
+                var darkBackground = Color.FromArgb(32, 32, 32);
+                var darkSecondary = Color.FromArgb(45, 45, 48);
+                var darkBorder = Color.FromArgb(60, 60, 60);
+                var darkText = Color.FromArgb(240, 240, 240);
+                var accentColor = Color.FromArgb(0, 122, 204);  // Blue accent
+
+                // Main form
+                this.BackColor = darkBackground;
+                this.ForeColor = darkText;
+
+                // TreeView
+                if (treeView != null)
+                {
+                    treeView.BackColor = darkSecondary;
+                    treeView.ForeColor = darkText;
+                    treeView.LineColor = darkBorder;
+                }
+
+                // File info panel
+                if (fileInfoPanel != null)
+                {
+                    fileInfoPanel.BackColor = darkSecondary;
+                    fileInfoPanel.ForeColor = darkText;
+                }
+
+                if (fileInfoLabel != null)
+                {
+                    fileInfoLabel.BackColor = darkSecondary;
+                    fileInfoLabel.ForeColor = darkText;
+                }
+
+                // Preview controls
+                if (previewText != null)
+                {
+                    previewText.BackColor = darkSecondary;
+                    previewText.ForeColor = darkText;
+                }
+
+                // Statistics panel
+                if (statisticsPanel != null)
+                {
+                    statisticsPanel.BackColor = darkSecondary;
+                    statisticsPanel.ForeColor = darkText;
+                }
+
+                if (statisticsLabel != null)
+                {
+                    statisticsLabel.BackColor = darkSecondary;
+                    statisticsLabel.ForeColor = darkText;
+                }
+
+                // File type list
+                if (fileTypeListView != null)
+                {
+                    fileTypeListView.BackColor = darkSecondary;
+                    fileTypeListView.ForeColor = darkText;
+                }
+
+                // Top panel controls
+                if (topPanel != null)
+                {
+                    topPanel.BackColor = darkBackground;
+                }
+
+                // ComboBox
+                if (driveComboBox != null)
+                {
+                    driveComboBox.BackColor = darkSecondary;
+                    driveComboBox.ForeColor = darkText;
+                }
+
+                // Buttons
+                foreach (Control control in topPanel?.Controls.Cast<Control>() ?? Enumerable.Empty<Control>())
+                {
+                    if (control is Button button)
+                    {
+                        button.BackColor = darkSecondary;
+                        button.ForeColor = darkText;
+                        button.FlatStyle = FlatStyle.Flat;
+                        button.FlatAppearance.BorderColor = darkBorder;
+                    }
+                }
             }
             else
             {
-                this.BackColor = SystemColors.Control;
-                this.ForeColor = SystemColors.ControlText;
-                treeView.BackColor = SystemColors.Window;
-                treeView.ForeColor = SystemColors.ControlText;
-                fileInfoPanel.BackColor = SystemColors.Window;
-                statisticsPanel.BackColor = SystemColors.Control;
+                // Light theme colors
+                var lightBackground = Color.White;
+                var lightSecondary = Color.FromArgb(250, 250, 250);
+                var lightText = Color.FromArgb(30, 30, 30);
+                var lightBorder = Color.FromArgb(200, 200, 200);
+
+                // Main form
+                this.BackColor = lightBackground;
+                this.ForeColor = lightText;
+
+                // TreeView
+                if (treeView != null)
+                {
+                    treeView.BackColor = lightBackground;
+                    treeView.ForeColor = lightText;
+                    treeView.LineColor = lightBorder;
+                }
+
+                // File info panel
+                if (fileInfoPanel != null)
+                {
+                    fileInfoPanel.BackColor = lightSecondary;
+                    fileInfoPanel.ForeColor = lightText;
+                }
+
+                if (fileInfoLabel != null)
+                {
+                    fileInfoLabel.BackColor = lightSecondary;
+                    fileInfoLabel.ForeColor = lightText;
+                }
+
+                // Preview controls
+                if (previewText != null)
+                {
+                    previewText.BackColor = lightBackground;
+                    previewText.ForeColor = lightText;
+                }
+
+                // Statistics panel
+                if (statisticsPanel != null)
+                {
+                    statisticsPanel.BackColor = lightSecondary;
+                    statisticsPanel.ForeColor = lightText;
+                }
+
+                if (statisticsLabel != null)
+                {
+                    statisticsLabel.BackColor = lightSecondary;
+                    statisticsLabel.ForeColor = lightText;
+                }
+
+                // File type list
+                if (fileTypeListView != null)
+                {
+                    fileTypeListView.BackColor = lightBackground;
+                    fileTypeListView.ForeColor = lightText;
+                }
+
+                // Top panel controls
+                if (topPanel != null)
+                {
+                    topPanel.BackColor = lightBackground;
+                }
+
+                // ComboBox
+                if (driveComboBox != null)
+                {
+                    driveComboBox.BackColor = lightBackground;
+                    driveComboBox.ForeColor = lightText;
+                }
+
+                // Buttons
+                foreach (Control control in topPanel?.Controls.Cast<Control>() ?? Enumerable.Empty<Control>())
+                {
+                    if (control is Button button)
+                    {
+                        button.UseVisualStyleBackColor = true;
+                        button.FlatStyle = FlatStyle.Standard;
+                    }
+                }
             }
         }
 
         private void LoadDrives()
         {
+            if (driveComboBox == null) return;
+            
+            driveComboBox.Items.Clear();  // Clear existing items first
+            
             DriveInfo[] drives = DriveInfo.GetDrives();
             foreach (DriveInfo drive in drives)
             {
@@ -895,7 +1359,8 @@ Full Path: {item.FullPath}";
                     driveComboBox.Items.Add(driveInfo);
                 }
             }
-            if (driveComboBox.Items.Count > 0)
+            
+            if (driveComboBox?.Items.Count > 0)
                 driveComboBox.SelectedIndex = 0;
         }
 
@@ -922,10 +1387,9 @@ Full Path: {item.FullPath}";
 
         private void TreeView_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
-            if (e.Node.ImageKey == "folder")
+            if (e.Node?.ImageKey == "folder")
             {
                 e.Node.ImageKey = "folderopen";
-                e.Node.SelectedImageKey = "folderopen";
             }
         }
 
@@ -946,6 +1410,7 @@ Full Path: {item.FullPath}";
 
         private void UpdateBreadcrumb(TreeNode node)
         {
+            if (breadcrumbBar == null) return;
             breadcrumbBar.Controls.Clear();
             var path = new List<TreeNode>();
             
@@ -973,84 +1438,11 @@ Full Path: {item.FullPath}";
 
                 link.LinkClicked += (s, e) =>
                 {
-                    var targetNode = (TreeNode)((LinkLabel)s).Tag;
-                    treeView.SelectedNode = targetNode;
+                    if (s is LinkLabel link && link.Tag is TreeNode targetNode && treeView != null)
+                        treeView.SelectedNode = targetNode;
                 };
 
                 breadcrumbBar.Controls.Add(link);
-            }
-        }
-
-        private void InitializePreviewPanel()
-        {
-            previewPanel = new Panel
-            {
-                Dock = DockStyle.Right,
-                Width = 300,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            previewPicture = new PictureBox
-            {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                Visible = false
-            };
-
-            previewText = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Visible = false
-            };
-
-            previewPanel.Controls.AddRange(new Control[] { previewPicture, previewText });
-            mainSplitContainer.Panel2.Controls.Add(previewPanel);
-
-            treeView.AfterSelect += UpdatePreview;
-        }
-
-        private void UpdatePreview(object sender, TreeViewEventArgs e)
-        {
-            if (e.Node?.Tag is not FileSystemItem item)
-            {
-                previewPicture.Visible = false;
-                previewText.Visible = false;
-                return;
-            }
-
-            try
-            {
-                string extension = Path.GetExtension(item.FullPath).ToLower();
-                
-                // Image preview
-                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" }.Contains(extension))
-                {
-                    using var stream = new FileStream(item.FullPath, FileMode.Open, FileAccess.Read);
-                    previewPicture.Image = Image.FromStream(stream);
-                    previewPicture.Visible = true;
-                    previewText.Visible = false;
-                }
-                // Text preview
-                else if (new[] { ".txt", ".log", ".xml", ".json", ".cs", ".html", ".css", ".js" }.Contains(extension))
-                {
-                    previewText.Text = File.ReadAllText(item.FullPath);
-                    previewText.Visible = true;
-                    previewPicture.Visible = false;
-                }
-                else
-                {
-                    previewPicture.Visible = false;
-                    previewText.Visible = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error loading preview: {ex.Message}");
-                previewPicture.Visible = false;
-                previewText.Visible = false;
             }
         }
 
@@ -1317,6 +1709,210 @@ Full Path: {item.FullPath}";
             {
                 UpdateStatusLabel("Ready");
             }
+        }
+
+        private void BrowseButton_Click(object sender, EventArgs e)
+        {
+            using var folderDialog = new FolderBrowserDialog
+            {
+                ShowNewFolderButton = false,
+                Description = "Select folder to scan"
+            };
+
+            if (folderDialog.ShowDialog() == DialogResult.OK)
+            {
+                if (driveComboBox != null)
+                {
+                    driveComboBox.Text = string.Empty;
+                    driveComboBox.Items.Add(folderDialog.SelectedPath);
+                    driveComboBox.SelectedItem = folderDialog.SelectedPath;
+                    
+                    // Automatically trigger scan
+                    ScanButton_Click(sender, e);
+                }
+            }
+        }
+
+        private void CopyFileTypeStats()
+        {
+            if (fileTypeListView == null) return;
+            
+            var sb = new StringBuilder();
+            foreach (ListViewItem item in fileTypeListView.Items)
+            {
+                sb.AppendLine(string.Join("\t", item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text)));
+            }
+            
+            if (sb.Length > 0)
+                Clipboard.SetText(sb.ToString());
+        }
+
+        private void ExportFileTypeStats()
+        {
+            if (fileTypeListView == null) return;
+
+            using var saveDialog = new SaveFileDialog
+            {
+                Filter = "CSV files (*.csv)|*.csv",
+                DefaultExt = "csv",
+                FileName = "FileTypeStats.csv"
+            };
+
+            if (saveDialog.ShowDialog() == DialogResult.OK)
+            {
+                var sb = new StringBuilder();
+                // Add header
+                sb.AppendLine(string.Join(",", fileTypeListView.Columns.Cast<ColumnHeader>().Select(ch => $"\"{ch.Text}\"")));
+                
+                // Add data
+                foreach (ListViewItem item in fileTypeListView.Items)
+                {
+                    sb.AppendLine(string.Join(",", item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => $"\"{s.Text}\"")));
+                }
+                
+                File.WriteAllText(saveDialog.FileName, sb.ToString());
+            }
+        }
+
+        private void FilterLargeFiles()
+        {
+            if (fileTypeListView == null) return;
+
+            foreach (ListViewItem item in fileTypeListView.Items)
+            {
+                var percentage = double.Parse(item.SubItems[3].Text.TrimEnd('%'));
+                item.Selected = percentage > 5;
+            }
+        }
+
+        private async void UpdatePreview(object sender, TreeViewEventArgs e)
+        {
+            if (e.Node?.Tag is not FileSystemItem item || previewPicture == null || previewText == null || loadingLabel == null)
+            {
+                Debug.WriteLine("Preview update skipped: null check failed");
+                return;
+            }
+
+            // Ensure preview controls are in the correct panel
+            if (previewPicture.Parent?.Parent != rightSplitContainer?.Panel1)
+            {
+                Debug.WriteLine("Fixing preview control location");
+                if (rightSplitContainer?.Panel1 != null)
+                {
+                    var splitContainer = rightSplitContainer.Panel1.Controls.OfType<SplitContainer>().FirstOrDefault();
+                    if (splitContainer != null)
+                    {
+                        splitContainer.Panel2.Controls.Add(previewPicture);
+                        splitContainer.Panel2.Controls.Add(previewText);
+                        splitContainer.Panel2.Controls.Add(loadingLabel);
+                    }
+                }
+            }
+
+            try
+            {
+                string extension = Path.GetExtension(item.FullPath).ToLower();
+                Debug.WriteLine($"Attempting to preview file: {item.FullPath} with extension: {extension}");
+                
+                // Image preview
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" }.Contains(extension))
+                {
+                    Debug.WriteLine("Loading standard image preview");
+                    
+                    previewText.Visible = false;
+                    previewPicture.Visible = false;
+                    loadingLabel.Visible = true;
+                    loadingLabel.BringToFront();
+                    
+                    try
+                    {
+                        using (var stream = new MemoryStream(File.ReadAllBytes(item.FullPath)))
+                        {
+                            var image = Image.FromStream(stream);
+                            if (previewPicture.Image != null)
+                            {
+                                var oldImage = previewPicture.Image;
+                                previewPicture.Image = null;
+                                oldImage.Dispose();
+                            }
+                            previewPicture.Image = image;
+                            previewPicture.BringToFront();
+                            previewPicture.Visible = true;
+                            Debug.WriteLine("Image loaded successfully");
+                        }
+                    }
+                    catch (Exception imgEx)
+                    {
+                        Debug.WriteLine($"Image loading error: {imgEx.Message}");
+                        previewText.Text = $"Error loading image: {imgEx.Message}";
+                        previewText.Visible = true;
+                        previewText.BringToFront();
+                    }
+                    finally
+                    {
+                        loadingLabel.Visible = false;
+                    }
+                }
+                else
+                {
+                    previewPicture.Visible = false;
+                    previewText.Visible = true;
+                    previewText.BringToFront();
+                    previewText.Text = "Preview not available for this file type";
+                    loadingLabel.Visible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Preview error: {ex.Message}");
+                previewPicture.Visible = false;
+                previewText.Text = $"Error loading preview: {ex.Message}";
+                previewText.Visible = true;
+                previewText.BringToFront();
+                loadingLabel.Visible = false;
+            }
+        }
+
+        private void ResetPanels()
+        {
+            if (statisticsLabel != null)
+                statisticsLabel.Text = "Click 'Browse' to select a folder or choose a drive to scan";
+
+            if (fileInfoLabel != null)
+                fileInfoLabel.Text = "Select a file or folder to view its details";
+
+            if (previewText != null)
+            {
+                previewText.Visible = true;
+                previewText.Text = "File preview will appear here when you select a supported file";
+            }
+
+            if (previewPicture != null)
+            {
+                previewPicture.Image?.Dispose();
+                previewPicture.Image = null;
+                previewPicture.Visible = false;
+            }
+
+            if (treeView != null)
+            {
+                treeView.Nodes.Clear();
+                var welcomeNode = new TreeNode("Welcome to Disk Space Analyzer");
+                welcomeNode.Nodes.Add("Select a drive or browse for a folder to begin scanning");
+                treeView.Nodes.Add(welcomeNode);
+            }
+
+            if (fileTypeListView != null)
+            {
+                fileTypeListView.Items.Clear();
+                fileTypeListView.Items.Add(new ListViewItem(new[] { "No scan data", "-", "-", "-", "-", "-" }));
+            }
+
+            if (statusLabel != null)
+                statusLabel.Text = "Ready";
+
+            if (progressBar != null)
+                progressBar.Value = 0;
         }
     }
 }
