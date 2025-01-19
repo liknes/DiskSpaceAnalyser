@@ -57,6 +57,11 @@ namespace DiskSpaceAnalyzer
 
         private Button? browseButton;
 
+        private DateTime _scanStartTime;
+        private long _totalBytesToScan;
+
+        private Panel? statusPanel;
+
         public MainForm()
         {
             InitializeComponent();
@@ -147,23 +152,23 @@ namespace DiskSpaceAnalyzer
                 Location = new Point(5, 8)
             };
 
-            scanButton = new Button
-            {
-                Text = "Scan",
-                Width = 80,
-                Height = 30,
-                Location = new Point(215, 5)
-            };
-            scanButton.Click += ScanButton_Click;
-
             browseButton = new Button
             {
                 Text = "Browse",
                 Width = 80,
                 Height = 30,
-                Location = new Point(300, 5)
+                Location = new Point(215, 5)
             };
             browseButton.Click += BrowseButton_Click;
+
+            scanButton = new Button
+            {
+                Text = "Scan",
+                Width = 80,
+                Height = 30,
+                Location = new Point(300, 5)
+            };
+            scanButton.Click += ScanButton_Click;
 
             duplicatesButton = new Button
             {
@@ -201,11 +206,19 @@ namespace DiskSpaceAnalyzer
             };
             settingsButton.Click += SettingsButton_Click;
 
+            progressBar = new ProgressBar
+            {
+                Width = 150,
+                Height = 20,
+                Location = new Point(745, 10),
+                Style = ProgressBarStyle.Blocks
+            };
+
             statusLabel = new Label
             {
                 Text = "Ready",
                 AutoSize = true,
-                Location = new Point(5, topPanel.Height + 5)
+                Location = new Point(900, 12)
             };
 
             topPanel.Controls.AddRange(new Control[] 
@@ -217,6 +230,7 @@ namespace DiskSpaceAnalyzer
                 timelineButton,
                 diskTrendsButton,
                 settingsButton,
+                progressBar,
                 statusLabel
             });
 
@@ -641,15 +655,34 @@ namespace DiskSpaceAnalyzer
             _totalScannedSize = 0;
             _totalFiles = 0;
             _totalDirectories = 0;
+            _scanStartTime = DateTime.Now;
 
             if (scanButton != null) scanButton.Text = "Cancel";
             if (treeView != null) treeView.Nodes.Clear();
-            if (progressBar != null) progressBar.Style = ProgressBarStyle.Marquee;
+            if (progressBar != null) 
+            {
+                progressBar.Value = 0;
+                progressBar.Style = ProgressBarStyle.Marquee;
+            }
             
-            // If it contains parentheses, it's a drive entry, otherwise it's a folder path
             string selectedPath = driveComboBox.Text.Contains("(") 
                 ? driveComboBox.Text.Split(' ')[0]  // Takes "D:" from "D: (800 MB)"
                 : driveComboBox.Text;  // Use full path for folders
+
+            // Get total size to scan
+            try
+            {
+                var driveInfo = new DriveInfo(selectedPath);
+                if (driveInfo.IsReady)
+                {
+                    _totalBytesToScan = driveInfo.TotalSize - driveInfo.TotalFreeSpace;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error getting drive info: {ex.Message}");
+                _totalBytesToScan = 0;
+            }
 
             try
             {
@@ -658,6 +691,11 @@ namespace DiskSpaceAnalyzer
                 UpdateStatistics();
                 UpdateFileTypeStats();
                 if (statusLabel != null) statusLabel.Text = "Scan completed";
+                if (progressBar != null) 
+                {
+                    progressBar.Style = ProgressBarStyle.Blocks;
+                    progressBar.Value = 100;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -674,6 +712,25 @@ namespace DiskSpaceAnalyzer
                 if (scanButton != null) scanButton.Text = "Scan";
                 if (progressBar != null) progressBar.Style = ProgressBarStyle.Blocks;
             }
+        }
+
+        private void UpdateProgress()
+        {
+            if (progressBar == null || _totalBytesToScan == 0) return;
+
+            var progress = (int)((_totalScannedSize * 100.0) / _totalBytesToScan);
+            progress = Math.Min(99, progress); // Never show 100% until completely done
+
+            var elapsedTime = DateTime.Now - _scanStartTime;
+            var estimatedTotalTime = TimeSpan.FromTicks((long)(elapsedTime.Ticks / (_totalScannedSize / (double)_totalBytesToScan)));
+            var remainingTime = estimatedTotalTime - elapsedTime;
+
+            this.Invoke(() =>
+            {
+                progressBar.Value = progress;
+                statusLabel.Text = $"Scanned {_totalFiles:N0} files ({FileSystemHelper.FormatSize(_totalScannedSize)}) - " +
+                                  $"Est. {remainingTime.Minutes:D2}:{remainingTime.Seconds:D2} remaining";
+            });
         }
 
         private async Task ScanDirectoryOptimized(string path, TreeNodeCollection parentNode, CancellationToken cancellationToken)
@@ -814,7 +871,7 @@ namespace DiskSpaceAnalyzer
                     // Update status periodically
                     if (_totalFiles % 100 == 0)
                     {
-                        UpdateStatusLabel($"Scanned {_totalFiles:N0} files ({FileSystemHelper.FormatSize(_totalScannedSize)})");
+                        UpdateProgress();
                         UpdateStatisticsSafe();
                     }
                 }
