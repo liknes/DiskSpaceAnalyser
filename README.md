@@ -16,7 +16,7 @@ A powerful and user-friendly Windows application for analyzing disk space usage 
 ## System Requirements
 
 - Windows OS
-- .NET Framework 6.0 or later
+- .NET Framework 8.0 or later
 - Administrator privileges for scanning system directories
 
 ## Installation
@@ -77,7 +77,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Built with .NET 6.0
+- Built with .NET 8.0
 - Uses Windows Forms for the user interface
 - Icons and visual elements from Windows System Icons
 
