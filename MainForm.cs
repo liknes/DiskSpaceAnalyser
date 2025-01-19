@@ -652,6 +652,8 @@ namespace DiskSpaceAnalyzer
         {
             if (string.IsNullOrEmpty(driveComboBox?.Text)) return;
 
+            ResetPanels();
+
             if (_cancellationTokenSource != null)
             {
                 _cancellationTokenSource.Cancel();
@@ -1869,6 +1871,48 @@ Full Path: {item.FullPath}";
                 previewText.BringToFront();
                 loadingLabel.Visible = false;
             }
+        }
+
+        private void ResetPanels()
+        {
+            if (statisticsLabel != null)
+                statisticsLabel.Text = "Click 'Browse' to select a folder or choose a drive to scan";
+
+            if (fileInfoLabel != null)
+                fileInfoLabel.Text = "Select a file or folder to view its details";
+
+            if (previewText != null)
+            {
+                previewText.Visible = true;
+                previewText.Text = "File preview will appear here when you select a supported file";
+            }
+
+            if (previewPicture != null)
+            {
+                previewPicture.Image?.Dispose();
+                previewPicture.Image = null;
+                previewPicture.Visible = false;
+            }
+
+            if (treeView != null)
+            {
+                treeView.Nodes.Clear();
+                var welcomeNode = new TreeNode("Welcome to Disk Space Analyzer");
+                welcomeNode.Nodes.Add("Select a drive or browse for a folder to begin scanning");
+                treeView.Nodes.Add(welcomeNode);
+            }
+
+            if (fileTypeListView != null)
+            {
+                fileTypeListView.Items.Clear();
+                fileTypeListView.Items.Add(new ListViewItem(new[] { "No scan data", "-", "-", "-", "-", "-" }));
+            }
+
+            if (statusLabel != null)
+                statusLabel.Text = "Ready";
+
+            if (progressBar != null)
+                progressBar.Value = 0;
         }
     }
 }
