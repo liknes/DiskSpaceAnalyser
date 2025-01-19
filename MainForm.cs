@@ -147,23 +147,23 @@ namespace DiskSpaceAnalyzer
                 Location = new Point(5, 8)
             };
 
-            browseButton = new Button
-            {
-                Text = "Browse",
-                Width = 80,
-                Height = 30,
-                Location = new Point(215, 5)
-            };
-            browseButton.Click += BrowseButton_Click;
-
             scanButton = new Button
             {
                 Text = "Scan",
                 Width = 80,
                 Height = 30,
-                Location = new Point(300, 5)
+                Location = new Point(215, 5)
             };
             scanButton.Click += ScanButton_Click;
+
+            browseButton = new Button
+            {
+                Text = "Browse",
+                Width = 80,
+                Height = 30,
+                Location = new Point(300, 5)
+            };
+            browseButton.Click += BrowseButton_Click;
 
             duplicatesButton = new Button
             {
@@ -201,15 +201,23 @@ namespace DiskSpaceAnalyzer
             };
             settingsButton.Click += SettingsButton_Click;
 
+            statusLabel = new Label
+            {
+                Text = "Ready",
+                AutoSize = true,
+                Location = new Point(5, topPanel.Height + 5)
+            };
+
             topPanel.Controls.AddRange(new Control[] 
             { 
                 driveComboBox,
-                browseButton,
                 scanButton,
+                browseButton,
                 duplicatesButton,
                 timelineButton,
                 diskTrendsButton,
-                settingsButton
+                settingsButton,
+                statusLabel
             });
 
             this.Controls.Add(topPanel);
@@ -803,11 +811,11 @@ namespace DiskSpaceAnalyzer
                         }
                     });
 
-                    // Update UI periodically
+                    // Update status periodically
                     if (_totalFiles % 100 == 0)
                     {
+                        UpdateStatusLabel($"Scanned {_totalFiles:N0} files ({FileSystemHelper.FormatSize(_totalScannedSize)})");
                         UpdateStatisticsSafe();
-                        UpdateFolderNodes(directoryNodes);
                     }
                 }
 
