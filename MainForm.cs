@@ -16,6 +16,7 @@ namespace DiskSpaceAnalyzer
 
     public partial class MainForm : Form
     {
+        private Panel? topPanel;
         private TreeView? treeView;
         private Button? scanButton;
         private ComboBox? driveComboBox;
@@ -38,6 +39,9 @@ namespace DiskSpaceAnalyzer
         private PictureBox? previewPicture;
         private TextBox? previewText;
         private Label? loadingLabel;
+        private Button? timelineButton;
+        private Button? diskTrendsButton;
+        private Button? duplicatesButton;
 
         private CancellationTokenSource? _cancellationTokenSource;
         private AppSettings _settings;
@@ -50,6 +54,8 @@ namespace DiskSpaceAnalyzer
         private ConcurrentDictionary<string, FolderStats> _folderStats = new();
 
         private ListView? fileTypeListView;
+
+        private Button? browseButton;
 
         public MainForm()
         {
@@ -89,7 +95,7 @@ namespace DiskSpaceAnalyzer
                 if (mainSplitContainer.Width > 400)
                     mainSplitContainer.SplitterDistance = mainSplitContainer.Width / 4;  // 25% for tree view
                 if (rightSplitContainer.Height > 400)
-                    rightSplitContainer.SplitterDistance = rightSplitContainer.Height / 3;  // 33% for top panel, giving more space to bottom
+                    rightSplitContainer.SplitterDistance = rightSplitContainer.Height / 3;  // 33% for top panel
             };
         }
 
@@ -104,7 +110,6 @@ namespace DiskSpaceAnalyzer
             InitializeFilterPanel();
             InitializeSearchBox();
             InitializeContextMenu();
-            InitializePreviewPanel();
             
             // Initial text
             if (statisticsLabel != null)
@@ -129,112 +134,76 @@ namespace DiskSpaceAnalyzer
 
         private void InitializeTopPanel()
         {
-            var topPanel = new Panel
+            topPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 50,
-                Padding = new Padding(10),
-                BackColor = Color.FromArgb(240, 240, 240)
+                Height = 40,
+                Padding = new Padding(5)
             };
-
-            // Modern button style
-            var buttonStyle = new Action<Button>(btn =>
-            {
-                btn.FlatStyle = FlatStyle.Flat;
-                btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-                btn.BackColor = Color.White;
-                btn.Font = new Font("Segoe UI", 9F);
-                btn.Cursor = Cursors.Hand;
-                btn.Height = 30;
-            });
 
             driveComboBox = new ComboBox
             {
-                Width = 150,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(10, 10),
-                Font = new Font("Segoe UI", 9F),
-                Height = 30
+                Width = 200,
+                Location = new Point(5, 8)
             };
 
-            var browseButton = new Button
+            browseButton = new Button
             {
                 Text = "Browse",
-                Width = 70,
-                Location = new Point(170, 10)
+                Width = 80,
+                Height = 30,
+                Location = new Point(215, 5)
             };
-            buttonStyle(browseButton);
             browseButton.Click += BrowseButton_Click;
 
             scanButton = new Button
             {
                 Text = "Scan",
-                Width = 70,
-                Location = new Point(250, 10)
+                Width = 80,
+                Height = 30,
+                Location = new Point(300, 5)
             };
-            buttonStyle(scanButton);
             scanButton.Click += ScanButton_Click;
 
-            settingsButton = new Button
-            {
-                Text = "Settings",
-                Width = 80,
-                Location = new Point(330, 10)
-            };
-            buttonStyle(settingsButton);
-            settingsButton.Click += SettingsButton_Click;
-
-            progressBar = new ProgressBar
-            {
-                Width = 150,
-                Location = new Point(420, 10),
-                Height = 30,
-                Style = ProgressBarStyle.Blocks,
-                MarqueeAnimationSpeed = 30
-            };
-
-            var findDuplicatesButton = new Button
+            duplicatesButton = new Button
             {
                 Text = "Find Duplicates",
-                Width = 110,
-                Location = new Point(580, 10)
+                Width = 100,
+                Height = 30,
+                Location = new Point(385, 5)
             };
-            buttonStyle(findDuplicatesButton);
-            findDuplicatesButton.Click += async (s, e) => await FindDuplicateFiles();
+            duplicatesButton.Click += async (s, e) => await FindDuplicateFiles();
 
-            var timelineButton = new Button
+            timelineButton = new Button
             {
                 Text = "Timeline",
                 Width = 80,
-                Location = new Point(700, 10)
-            };
-            buttonStyle(timelineButton);
-            timelineButton.Click += (s, e) =>
-            {
-                var items = GetAllItems();
-                using var timelineForm = new TimelineForm(items);
-                timelineForm.ShowDialog(this);
+                Height = 30,
+                Location = new Point(490, 5),
+                Enabled = false
             };
 
-            var trendsButton = new Button
+            diskTrendsButton = new Button
             {
                 Text = "Disk Trends",
-                Width = 90,
-                Location = new Point(790, 10)
-            };
-            buttonStyle(trendsButton);
-            trendsButton.Click += (s, e) =>
-            {
-                var selectedDrive = driveComboBox.Text.Split(' ')[0];
-                using var trendsForm = new DiskTrendsForm(selectedDrive);
-                trendsForm.ShowDialog(this);
+                Width = 80,
+                Height = 30,
+                Location = new Point(575, 5),
+                Enabled = false
             };
 
-            topPanel.Controls.AddRange(new Control[] { 
-                driveComboBox, browseButton, scanButton, settingsButton, progressBar, 
-                findDuplicatesButton, timelineButton, trendsButton 
+            topPanel.Controls.AddRange(new Control[] 
+            { 
+                driveComboBox,
+                browseButton,
+                scanButton,
+                duplicatesButton,
+                timelineButton,
+                diskTrendsButton
             });
+
             this.Controls.Add(topPanel);
+            LoadDrives();
         }
 
         private void InitializeTreeView()
@@ -279,6 +248,43 @@ namespace DiskSpaceAnalyzer
 
         private void InitializeFileInfoPanel()
         {
+            Debug.WriteLine("Initializing File Info Panel");
+            
+            // Create a split container for file info and preview
+            var fileInfoSplitContainer = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                Panel1MinSize = 100,
+                Panel2MinSize = 100
+            };
+
+            // Clear any existing controls
+            if (rightSplitContainer?.Panel1 != null)
+                rightSplitContainer.Panel1.Controls.Clear();
+
+            // Add labels to identify panels
+            var panel1Label = new Label
+            {
+                Text = "PANEL 1: File Details",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightBlue,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
+            };
+            fileInfoSplitContainer.Panel1.Controls.Add(panel1Label);
+
+            var panel2Label = new Label
+            {
+                Text = "PANEL 2: File Preview",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightGreen,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
+            };
+            fileInfoSplitContainer.Panel2.Controls.Add(panel2Label);
+
+            // Panel 1 - File Info
             fileInfoPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -294,12 +300,84 @@ namespace DiskSpaceAnalyzer
                 BackColor = Color.White
             };
 
-            fileInfoPanel?.Controls.Add(fileInfoLabel);
-            rightSplitContainer?.Panel1.Controls.Add(fileInfoPanel);
+            fileInfoPanel.Controls.Add(fileInfoLabel);
+            fileInfoSplitContainer.Panel1.Controls.Add(fileInfoPanel);
+
+            // Panel 2 - Preview
+            var previewContainer = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None
+            };
+
+            previewPicture = new PictureBox
+            {
+                Dock = DockStyle.Fill,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.White,
+                Visible = false,
+                BorderStyle = BorderStyle.Fixed3D
+            };
+
+            previewText = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Visible = false,
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            loadingLabel = new Label
+            {
+                Text = "⌛ Loading preview...",
+                AutoSize = false,
+                Font = new Font("Segoe UI", 12f),
+                Visible = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                BackColor = Color.White
+            };
+
+            // Add preview controls to previewContainer
+            previewContainer.Controls.AddRange(new Control[] { previewPicture, previewText, loadingLabel });
+            fileInfoSplitContainer.Panel2.Controls.Add(previewContainer);
+
+            Debug.WriteLine("Adding fileInfoSplitContainer to rightSplitContainer.Panel1");
+            rightSplitContainer.Panel1.Controls.Add(fileInfoSplitContainer);
+
+            // Initial text
+            fileInfoLabel.Text = "Select a file or folder to view its details";
+            previewText.Text = "File preview will appear here when you select a supported file";
+            previewText.Visible = true;
+
+            // Make sure preview updates work
+            if (treeView != null)
+            {
+                Debug.WriteLine("Setting up TreeView preview handler");
+                treeView.AfterSelect -= UpdatePreview;
+                treeView.AfterSelect += UpdatePreview;
+            }
         }
 
         private void InitializeFileTypePanel()
         {
+            Debug.WriteLine("Initializing File Type Panel");
+            
+            // Clear any existing controls
+            if (rightSplitContainer?.Panel2 != null)
+                rightSplitContainer.Panel2.Controls.Clear();
+
+            var panel3Label = new Label
+            {
+                Text = "PANEL 3: File Type Statistics",
+                Dock = DockStyle.Top,
+                BackColor = Color.LightPink,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 25
+            };
+
             fileTypeListView = new ListView
             {
                 Dock = DockStyle.Fill,
@@ -348,18 +426,14 @@ namespace DiskSpaceAnalyzer
             var item = new ListViewItem(new[] { "No scan data", "-", "-", "-", "-", "-" });
             fileTypeListView.Items.Add(item);
 
-            if (rightSplitContainer != null)
+            Debug.WriteLine("Adding controls to rightSplitContainer.Panel2");
+            rightSplitContainer.Panel2.Controls.Add(panel3Label);
+            rightSplitContainer.Panel2.Controls.Add(fileTypeListView);
+            
+            if (statisticsPanel != null)
             {
-                // Add the ListView
-                rightSplitContainer.Panel2.Controls.Add(fileTypeListView);
-                
-                // Add the statistics panel at the bottom
-                if (statisticsPanel != null)
-                {
-                    statisticsPanel.Dock = DockStyle.Bottom;
-                    rightSplitContainer.Panel2.Controls.Add(statisticsPanel);
-                    statisticsPanel.BringToFront();
-                }
+                statisticsPanel.Dock = DockStyle.Bottom;
+                rightSplitContainer.Panel2.Controls.Add(statisticsPanel);
             }
         }
 
@@ -1060,11 +1134,14 @@ Full Path: {item.FullPath}";
             {
                 if (drive.IsReady)
                 {
-                    string driveInfo = $"{drive.Name} ({FileSystemHelper.FormatSize(drive.TotalSize)})";
-                    driveComboBox.Items.Add(driveInfo);
+                    if (driveComboBox != null)
+                    {
+                        string driveInfo = $"{drive.Name} ({FileSystemHelper.FormatSize(drive.TotalSize)})";
+                        driveComboBox.Items.Add(driveInfo);
+                    }
                 }
             }
-            if (driveComboBox.Items.Count > 0)
+            if (driveComboBox?.Items.Count > 0)
                 driveComboBox.SelectedIndex = 0;
         }
 
@@ -1147,126 +1224,6 @@ Full Path: {item.FullPath}";
                 };
 
                 breadcrumbBar.Controls.Add(link);
-            }
-        }
-
-        private void InitializePreviewPanel()
-        {
-            previewPanel = new Panel
-            {
-                Dock = DockStyle.Right,
-                Width = 400,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            previewPicture = new PictureBox
-            {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                Visible = false
-            };
-
-            previewText = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Visible = false
-            };
-
-            loadingLabel = new Label
-            {
-                Text = "⌛ Loading preview...",
-                AutoSize = true,
-                Font = new Font("Segoe UI", 12f),
-                Visible = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill
-            };
-
-            if (rightSplitContainer?.Panel2 != null && previewPicture != null && previewText != null && loadingLabel != null)
-                rightSplitContainer.Panel2.Controls.AddRange(new Control[] { previewPicture, previewText, loadingLabel });
-            if (mainSplitContainer?.Panel2 != null && previewPanel != null)
-                mainSplitContainer.Panel2.Controls.Add(previewPanel);
-
-            treeView.AfterSelect += UpdatePreview;
-        }
-
-        private async void UpdatePreview(object sender, TreeViewEventArgs e)
-        {
-            if (e.Node?.Tag is not FileSystemItem item || previewPicture == null || previewText == null || loadingLabel == null)
-            {
-                if (previewPicture != null) previewPicture.Visible = false;
-                if (previewText != null) previewText.Visible = false;
-                if (loadingLabel != null) loadingLabel.Visible = false;
-                return;
-            }
-
-            try
-            {
-                string extension = Path.GetExtension(item.FullPath).ToLower();
-                
-                // RAW formats - handle asynchronously
-                if (new[] { ".dng", ".cr2", ".nef" }.Contains(extension))
-                {
-                    previewPicture.Image = null;
-                    previewPicture.Visible = false;
-                    previewText.Visible = false;
-                    loadingLabel.Visible = true;
-
-                    await Task.Run(() =>
-                    {
-                        using var image = new MagickImage(item.FullPath);
-                        image.Quality = 50;
-                        image.Resize(800, 800);
-                        
-                        using var memStream = new MemoryStream();
-                        image.Write(memStream, MagickFormat.Jpg);
-                        memStream.Position = 0;
-
-                        this.Invoke(() =>
-                        {
-                            previewPicture.Image = Image.FromStream(memStream);
-                            previewPicture.Visible = true;
-                            loadingLabel.Visible = false;
-                        });
-                    });
-                }
-                // Image preview
-                else if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" }.Contains(extension))
-                {
-                    using var stream = File.OpenRead(item.FullPath);
-                    previewPicture.Image = Image.FromStream(stream);
-                    previewPicture.Visible = true;
-                    previewText.Visible = false;
-                    loadingLabel.Visible = false;
-                }
-                // Text preview
-                else if (new[] { ".txt", ".log", ".xml", ".json", ".cs", ".html", ".css", ".js" }.Contains(extension))
-                {
-                    previewText.Text = File.ReadAllText(item.FullPath);
-                    previewText.Visible = true;
-                    previewPicture.Visible = false;
-                    loadingLabel.Visible = false;
-                }
-                else
-                {
-                    loadingLabel.Visible = false;
-                    previewPicture.Visible = false;
-                    previewText.Visible = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error loading preview: {ex.Message}");
-                if (previewPicture != null) previewPicture.Visible = false;
-                if (previewText != null) 
-                {
-                    previewText.Text = $"Error loading preview: {ex.Message}";
-                    previewText.Visible = true;
-                }
-                if (loadingLabel != null) loadingLabel.Visible = false;
             }
         }
 
@@ -1606,6 +1563,94 @@ Full Path: {item.FullPath}";
             {
                 var percentage = double.Parse(item.SubItems[3].Text.TrimEnd('%'));
                 item.Selected = percentage > 5;
+            }
+        }
+
+        private async void UpdatePreview(object sender, TreeViewEventArgs e)
+        {
+            if (e.Node?.Tag is not FileSystemItem item || previewPicture == null || previewText == null || loadingLabel == null)
+            {
+                Debug.WriteLine("Preview update skipped: null check failed");
+                return;
+            }
+
+            // Ensure preview controls are in the correct panel
+            if (previewPicture.Parent?.Parent != rightSplitContainer?.Panel1)
+            {
+                Debug.WriteLine("Fixing preview control location");
+                if (rightSplitContainer?.Panel1 != null)
+                {
+                    var splitContainer = rightSplitContainer.Panel1.Controls.OfType<SplitContainer>().FirstOrDefault();
+                    if (splitContainer != null)
+                    {
+                        splitContainer.Panel2.Controls.Add(previewPicture);
+                        splitContainer.Panel2.Controls.Add(previewText);
+                        splitContainer.Panel2.Controls.Add(loadingLabel);
+                    }
+                }
+            }
+
+            try
+            {
+                string extension = Path.GetExtension(item.FullPath).ToLower();
+                Debug.WriteLine($"Attempting to preview file: {item.FullPath} with extension: {extension}");
+                
+                // Image preview
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" }.Contains(extension))
+                {
+                    Debug.WriteLine("Loading standard image preview");
+                    
+                    previewText.Visible = false;
+                    previewPicture.Visible = false;
+                    loadingLabel.Visible = true;
+                    loadingLabel.BringToFront();
+                    
+                    try
+                    {
+                        using (var stream = new MemoryStream(File.ReadAllBytes(item.FullPath)))
+                        {
+                            var image = Image.FromStream(stream);
+                            if (previewPicture.Image != null)
+                            {
+                                var oldImage = previewPicture.Image;
+                                previewPicture.Image = null;
+                                oldImage.Dispose();
+                            }
+                            previewPicture.Image = image;
+                            previewPicture.BringToFront();
+                            previewPicture.Visible = true;
+                            Debug.WriteLine("Image loaded successfully");
+                        }
+                    }
+                    catch (Exception imgEx)
+                    {
+                        Debug.WriteLine($"Image loading error: {imgEx.Message}");
+                        previewText.Text = $"Error loading image: {imgEx.Message}";
+                        previewText.Visible = true;
+                        previewText.BringToFront();
+                    }
+                    finally
+                    {
+                        loadingLabel.Visible = false;
+                    }
+                }
+                else
+                {
+                    previewPicture.Visible = false;
+                    previewText.Visible = true;
+                    previewText.BringToFront();
+                    previewText.Text = "Preview not available for this file type";
+                    loadingLabel.Visible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Preview error: {ex.Message}");
+                previewPicture.Visible = false;
+                previewText.Text = $"Error loading preview: {ex.Message}";
+                previewText.Visible = true;
+                previewText.BringToFront();
+                loadingLabel.Visible = false;
             }
         }
     }
