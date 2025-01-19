@@ -22,8 +22,7 @@ A powerful and user-friendly Windows application for analyzing disk space usage 
 ## Installation
 
 1. Download the latest release from the [Releases](https://github.com/yourusername/DiskSpaceAnalyzer/releases) page
-2. Extract the ZIP file to your preferred location
-3. Run `DiskSpaceAnalyzer.exe`
+2. Run `DiskSpaceAnalyzer.exe`
 
 ## Usage
 
