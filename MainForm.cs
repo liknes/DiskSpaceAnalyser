@@ -192,6 +192,15 @@ namespace DiskSpaceAnalyzer
                 Enabled = false
             };
 
+            settingsButton = new Button
+            {
+                Text = "⚙️ Settings",
+                Width = 80,
+                Height = 30,
+                Location = new Point(660, 5)
+            };
+            settingsButton.Click += SettingsButton_Click;
+
             topPanel.Controls.AddRange(new Control[] 
             { 
                 driveComboBox,
@@ -199,7 +208,8 @@ namespace DiskSpaceAnalyzer
                 scanButton,
                 duplicatesButton,
                 timelineButton,
-                diskTrendsButton
+                diskTrendsButton,
+                settingsButton
             });
 
             this.Controls.Add(topPanel);
