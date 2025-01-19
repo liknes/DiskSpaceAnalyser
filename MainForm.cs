@@ -62,6 +62,8 @@ namespace DiskSpaceAnalyzer
 
         private Panel? statusPanel;
 
+        private Label? versionLabel;
+
         public MainForm()
         {
             InitializeComponent();
@@ -71,7 +73,7 @@ namespace DiskSpaceAnalyzer
             InitializeControls();
             LoadDrives();
             ApplyTheme();
-            this.Text = "Disk Space Analyzer";
+            this.Text = $"Disk Space Analyzer {AppVersion.VersionString}";
             this.WindowState = FormWindowState.Maximized;
         }
 
@@ -135,6 +137,15 @@ namespace DiskSpaceAnalyzer
                 welcomeNode.Nodes.Add("Select a drive or browse for a folder to begin scanning");
                 treeView.Nodes.Add(welcomeNode);
             }
+
+            versionLabel = new Label
+            {
+                Text = AppVersion.VersionString,
+                AutoSize = true,
+                Location = new Point(1100, 12),
+                ForeColor = Color.Gray,
+                Font = new Font("Segoe UI", 8f)
+            };
         }
 
         private void InitializeTopPanel()
@@ -152,23 +163,23 @@ namespace DiskSpaceAnalyzer
                 Location = new Point(5, 8)
             };
 
-            browseButton = new Button
-            {
-                Text = "Browse",
-                Width = 80,
-                Height = 30,
-                Location = new Point(215, 5)
-            };
-            browseButton.Click += BrowseButton_Click;
-
             scanButton = new Button
             {
                 Text = "Scan",
                 Width = 80,
                 Height = 30,
-                Location = new Point(300, 5)
+                Location = new Point(215, 5)
             };
             scanButton.Click += ScanButton_Click;
+
+            browseButton = new Button
+            {
+                Text = "Browse",
+                Width = 80,
+                Height = 30,
+                Location = new Point(300, 5)
+            };
+            browseButton.Click += BrowseButton_Click;
 
             duplicatesButton = new Button
             {
@@ -298,7 +309,7 @@ namespace DiskSpaceAnalyzer
             // Add labels to identify panels
             var panel1Label = new Label
             {
-                Text = "PANEL 1: File Details",
+                Text = "File Details",
                 Dock = DockStyle.Top,
                 BackColor = Color.LightBlue,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -308,7 +319,7 @@ namespace DiskSpaceAnalyzer
 
             var panel2Label = new Label
             {
-                Text = "PANEL 2: File Preview",
+                Text = "File Preview",
                 Dock = DockStyle.Top,
                 BackColor = Color.LightGreen,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -403,7 +414,7 @@ namespace DiskSpaceAnalyzer
 
             var panel3Label = new Label
             {
-                Text = "PANEL 3: File Type Statistics",
+                Text = "File Type Statistics",
                 Dock = DockStyle.Top,
                 BackColor = Color.LightPink,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -1109,7 +1120,7 @@ Full Path: {item.FullPath}";
 
         private void DeleteSelectedFile()
         {
-            if (treeView.SelectedNode?.Tag is FileSystemItem item)
+            if (treeView?.SelectedNode?.Tag is FileSystemItem item)
             {
                 try
                 {
