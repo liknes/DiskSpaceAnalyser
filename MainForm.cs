@@ -1097,60 +1097,191 @@ Full Path: {item.FullPath}";
         {
             if (_settings.DarkMode)
             {
+                // Dark theme colors
                 var darkBackground = Color.FromArgb(32, 32, 32);
-                var darkSecondary = Color.FromArgb(48, 48, 48);
+                var darkSecondary = Color.FromArgb(45, 45, 48);
+                var darkBorder = Color.FromArgb(60, 60, 60);
                 var darkText = Color.FromArgb(240, 240, 240);
+                var accentColor = Color.FromArgb(0, 122, 204);  // Blue accent
 
+                // Main form
                 this.BackColor = darkBackground;
                 this.ForeColor = darkText;
-                
-                treeView.BackColor = darkSecondary;
-                treeView.ForeColor = darkText;
-                treeView.LineColor = Color.FromArgb(80, 80, 80);
-                
-                fileInfoPanel.BackColor = darkSecondary;
-                fileInfoLabel.BackColor = darkSecondary;
-                fileInfoLabel.ForeColor = darkText;
-                
-                statisticsPanel.BackColor = darkSecondary;
-                statisticsLabel.ForeColor = darkText;
+
+                // TreeView
+                if (treeView != null)
+                {
+                    treeView.BackColor = darkSecondary;
+                    treeView.ForeColor = darkText;
+                    treeView.LineColor = darkBorder;
+                }
+
+                // File info panel
+                if (fileInfoPanel != null)
+                {
+                    fileInfoPanel.BackColor = darkSecondary;
+                    fileInfoPanel.ForeColor = darkText;
+                }
+
+                if (fileInfoLabel != null)
+                {
+                    fileInfoLabel.BackColor = darkSecondary;
+                    fileInfoLabel.ForeColor = darkText;
+                }
+
+                // Preview controls
+                if (previewText != null)
+                {
+                    previewText.BackColor = darkSecondary;
+                    previewText.ForeColor = darkText;
+                }
+
+                // Statistics panel
+                if (statisticsPanel != null)
+                {
+                    statisticsPanel.BackColor = darkSecondary;
+                    statisticsPanel.ForeColor = darkText;
+                }
+
+                if (statisticsLabel != null)
+                {
+                    statisticsLabel.BackColor = darkSecondary;
+                    statisticsLabel.ForeColor = darkText;
+                }
+
+                // File type list
+                if (fileTypeListView != null)
+                {
+                    fileTypeListView.BackColor = darkSecondary;
+                    fileTypeListView.ForeColor = darkText;
+                }
+
+                // Top panel controls
+                if (topPanel != null)
+                {
+                    topPanel.BackColor = darkBackground;
+                }
+
+                // ComboBox
+                if (driveComboBox != null)
+                {
+                    driveComboBox.BackColor = darkSecondary;
+                    driveComboBox.ForeColor = darkText;
+                }
+
+                // Buttons
+                foreach (Control control in topPanel?.Controls.Cast<Control>() ?? Enumerable.Empty<Control>())
+                {
+                    if (control is Button button)
+                    {
+                        button.BackColor = darkSecondary;
+                        button.ForeColor = darkText;
+                        button.FlatStyle = FlatStyle.Flat;
+                        button.FlatAppearance.BorderColor = darkBorder;
+                    }
+                }
             }
             else
             {
+                // Light theme colors
                 var lightBackground = Color.White;
                 var lightSecondary = Color.FromArgb(250, 250, 250);
                 var lightText = Color.FromArgb(30, 30, 30);
+                var lightBorder = Color.FromArgb(200, 200, 200);
 
+                // Main form
                 this.BackColor = lightBackground;
                 this.ForeColor = lightText;
-                
-                treeView.BackColor = lightBackground;
-                treeView.ForeColor = lightText;
-                treeView.LineColor = Color.FromArgb(200, 200, 200);
-                
-                fileInfoPanel.BackColor = lightSecondary;
-                fileInfoLabel.BackColor = lightSecondary;
-                fileInfoLabel.ForeColor = lightText;
-                
-                statisticsPanel.BackColor = lightSecondary;
-                statisticsLabel.ForeColor = lightText;
+
+                // TreeView
+                if (treeView != null)
+                {
+                    treeView.BackColor = lightBackground;
+                    treeView.ForeColor = lightText;
+                    treeView.LineColor = lightBorder;
+                }
+
+                // File info panel
+                if (fileInfoPanel != null)
+                {
+                    fileInfoPanel.BackColor = lightSecondary;
+                    fileInfoPanel.ForeColor = lightText;
+                }
+
+                if (fileInfoLabel != null)
+                {
+                    fileInfoLabel.BackColor = lightSecondary;
+                    fileInfoLabel.ForeColor = lightText;
+                }
+
+                // Preview controls
+                if (previewText != null)
+                {
+                    previewText.BackColor = lightBackground;
+                    previewText.ForeColor = lightText;
+                }
+
+                // Statistics panel
+                if (statisticsPanel != null)
+                {
+                    statisticsPanel.BackColor = lightSecondary;
+                    statisticsPanel.ForeColor = lightText;
+                }
+
+                if (statisticsLabel != null)
+                {
+                    statisticsLabel.BackColor = lightSecondary;
+                    statisticsLabel.ForeColor = lightText;
+                }
+
+                // File type list
+                if (fileTypeListView != null)
+                {
+                    fileTypeListView.BackColor = lightBackground;
+                    fileTypeListView.ForeColor = lightText;
+                }
+
+                // Top panel controls
+                if (topPanel != null)
+                {
+                    topPanel.BackColor = lightBackground;
+                }
+
+                // ComboBox
+                if (driveComboBox != null)
+                {
+                    driveComboBox.BackColor = lightBackground;
+                    driveComboBox.ForeColor = lightText;
+                }
+
+                // Buttons
+                foreach (Control control in topPanel?.Controls.Cast<Control>() ?? Enumerable.Empty<Control>())
+                {
+                    if (control is Button button)
+                    {
+                        button.UseVisualStyleBackColor = true;
+                        button.FlatStyle = FlatStyle.Standard;
+                    }
+                }
             }
         }
 
         private void LoadDrives()
         {
+            if (driveComboBox == null) return;
+            
+            driveComboBox.Items.Clear();  // Clear existing items first
+            
             DriveInfo[] drives = DriveInfo.GetDrives();
             foreach (DriveInfo drive in drives)
             {
                 if (drive.IsReady)
                 {
-                    if (driveComboBox != null)
-                    {
-                        string driveInfo = $"{drive.Name} ({FileSystemHelper.FormatSize(drive.TotalSize)})";
-                        driveComboBox.Items.Add(driveInfo);
-                    }
+                    string driveInfo = $"{drive.Name} ({FileSystemHelper.FormatSize(drive.TotalSize)})";
+                    driveComboBox.Items.Add(driveInfo);
                 }
             }
+            
             if (driveComboBox?.Items.Count > 0)
                 driveComboBox.SelectedIndex = 0;
         }

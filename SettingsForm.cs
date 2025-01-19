@@ -57,7 +57,8 @@ namespace DiskSpaceAnalyzer
                 Checked = _settings.DarkMode,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F),
-                Location = new Point(15, 25)
+                Location = new Point(15, 25),
+                Enabled = false
             };
 
             // File Settings Group
