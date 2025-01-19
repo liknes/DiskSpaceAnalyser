@@ -5,106 +5,169 @@ namespace DiskSpaceAnalyzer
     public partial class SettingsForm : Form
     {
         private readonly AppSettings _settings;
+        private CheckBox? darkModeCheckBox;
+        private CheckBox? showHiddenFilesCheckBox;
+        private CheckBox? showSystemFilesCheckBox;
+        private NumericUpDown? maxDisplayedItemsUpDown;
+        private Button? saveButton;
+        private Button? cancelButton;
 
         public SettingsForm(AppSettings settings)
         {
-            InitializeComponent();
             _settings = settings;
-            InitializeControls();
+            InitializeSettingsComponent();
         }
 
-        private void InitializeControls()
+        private void InitializeSettingsComponent()
         {
-            this.Size = new Size(400, 500);
             this.Text = "Settings";
+            this.Size = new Size(400, 450);
             this.StartPosition = FormStartPosition.CenterParent;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
 
             var mainPanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                Padding = new Padding(20),
+                RowCount = 5,
+                ColumnCount = 1,
+                RowStyles = {
+                    new RowStyle(SizeType.AutoSize),
+                    new RowStyle(SizeType.AutoSize),
+                    new RowStyle(SizeType.AutoSize),
+                    new RowStyle(SizeType.AutoSize),
+                    new RowStyle(SizeType.Percent, 100)
+                }
+            };
+
+            // Display Settings Group
+            var displayGroup = new GroupBox
+            {
+                Text = "Display Settings",
+                Dock = DockStyle.Fill,
                 Padding = new Padding(10),
-                RowCount = 8,
-                ColumnCount = 2
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
 
-            // Minimum file size
-            mainPanel.Controls.Add(new Label { Text = "Minimum File Size (MB):" }, 0, 0);
-            var minSizeInput = new NumericUpDown
-            {
-                Minimum = 0,
-                Maximum = 1000,
-                Value = _settings.MinimumFileSize / (1024 * 1024),
-                Dock = DockStyle.Fill
-            };
-            mainPanel.Controls.Add(minSizeInput, 1, 0);
-
-            // Show hidden files
-            var hiddenFilesCheck = new CheckBox
-            {
-                Text = "Show Hidden Files",
-                Checked = _settings.ShowHiddenFiles,
-                Dock = DockStyle.Fill
-            };
-            mainPanel.Controls.Add(hiddenFilesCheck, 0, 1);
-
-            // Show system files
-            var systemFilesCheck = new CheckBox
-            {
-                Text = "Show System Files",
-                Checked = _settings.ShowSystemFiles,
-                Dock = DockStyle.Fill
-            };
-            mainPanel.Controls.Add(systemFilesCheck, 0, 2);
-
-            // Dark mode
-            var darkModeCheck = new CheckBox
+            darkModeCheckBox = new CheckBox
             {
                 Text = "Dark Mode",
                 Checked = _settings.DarkMode,
-                Dock = DockStyle.Fill
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                Location = new Point(15, 25)
             };
-            mainPanel.Controls.Add(darkModeCheck, 0, 3);
 
-            // Auto expand nodes
-            var autoExpandCheck = new CheckBox
+            // File Settings Group
+            var fileGroup = new GroupBox
             {
-                Text = "Auto Expand Nodes",
-                Checked = _settings.AutoExpandNodes,
-                Dock = DockStyle.Fill
+                Text = "File Settings",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
-            mainPanel.Controls.Add(autoExpandCheck, 0, 4);
 
-            // Max displayed items
-            mainPanel.Controls.Add(new Label { Text = "Max Displayed Items:" }, 0, 5);
-            var maxItemsInput = new NumericUpDown
+            showHiddenFilesCheckBox = new CheckBox
             {
-                Minimum = 100,
-                Maximum = 10000,
+                Text = "Show Hidden Files",
+                Checked = _settings.ShowHiddenFiles,
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                Location = new Point(15, 25)
+            };
+
+            showSystemFilesCheckBox = new CheckBox
+            {
+                Text = "Show System Files",
+                Checked = _settings.ShowSystemFiles,
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                Location = new Point(15, 50)
+            };
+
+            // Performance Settings Group
+            var performanceGroup = new GroupBox
+            {
+                Text = "Performance Settings",
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+            };
+
+            var maxItemsLabel = new Label
+            {
+                Text = "Maximum items displayed per folder:",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F),
+                Location = new Point(15, 25)
+            };
+
+            maxDisplayedItemsUpDown = new NumericUpDown
+            {
+                Minimum = 10,
+                Maximum = 1000,
                 Value = _settings.MaxDisplayedItems,
-                Dock = DockStyle.Fill
+                Location = new Point(15, 50),
+                Width = 100
             };
-            mainPanel.Controls.Add(maxItemsInput, 1, 5);
 
-            // Save button
-            var saveButton = new Button
+            // Button Panel
+            var buttonPanel = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 50,
+                Padding = new Padding(0, 10, 0, 0)
+            };
+
+            saveButton = new Button
             {
                 Text = "Save",
-                Dock = DockStyle.Bottom
+                DialogResult = DialogResult.OK,
+                Width = 80,
+                Height = 30,
+                Location = new Point(buttonPanel.Width - 175, 10)
             };
-            saveButton.Click += (s, e) =>
+            saveButton.Click += SaveButton_Click;
+
+            cancelButton = new Button
             {
-                _settings.MinimumFileSize = (long)minSizeInput.Value * 1024 * 1024;
-                _settings.ShowHiddenFiles = hiddenFilesCheck.Checked;
-                _settings.ShowSystemFiles = systemFilesCheck.Checked;
-                _settings.DarkMode = darkModeCheck.Checked;
-                _settings.AutoExpandNodes = autoExpandCheck.Checked;
-                _settings.MaxDisplayedItems = (int)maxItemsInput.Value;
-                _settings.Save();
-                DialogResult = DialogResult.OK;
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Width = 80,
+                Height = 30,
+                Location = new Point(buttonPanel.Width - 85, 10)
             };
 
-            mainPanel.Controls.Add(saveButton, 0, 7);
+            // Add controls to groups
+            displayGroup.Controls.Add(darkModeCheckBox);
+            fileGroup.Controls.AddRange(new Control[] { showHiddenFilesCheckBox, showSystemFilesCheckBox });
+            performanceGroup.Controls.AddRange(new Control[] { maxItemsLabel, maxDisplayedItemsUpDown });
+            buttonPanel.Controls.AddRange(new Control[] { saveButton, cancelButton });
+
+            // Add groups to main panel
+            mainPanel.Controls.Add(displayGroup, 0, 0);
+            mainPanel.Controls.Add(fileGroup, 0, 1);
+            mainPanel.Controls.Add(performanceGroup, 0, 2);
+            mainPanel.Controls.Add(buttonPanel, 0, 3);
+
             this.Controls.Add(mainPanel);
+        }
+
+        private void SaveButton_Click(object sender, EventArgs e)
+        {
+            if (darkModeCheckBox != null)
+                _settings.DarkMode = darkModeCheckBox.Checked;
+            
+            if (showHiddenFilesCheckBox != null)
+                _settings.ShowHiddenFiles = showHiddenFilesCheckBox.Checked;
+            
+            if (showSystemFilesCheckBox != null)
+                _settings.ShowSystemFiles = showSystemFilesCheckBox.Checked;
+            
+            if (maxDisplayedItemsUpDown != null)
+                _settings.MaxDisplayedItems = (int)maxDisplayedItemsUpDown.Value;
         }
     }
 }
